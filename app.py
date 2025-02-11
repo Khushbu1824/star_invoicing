@@ -2,7 +2,9 @@ import json
 
 import requests
 
-from flask import Flask, render_template, request, redirect, url_for, make_response
+import io
+
+from flask import Flask, render_template, request, redirect, url_for, make_response, Response
 
 from peewee import SqliteDatabase
 
@@ -101,8 +103,11 @@ def invoices():
 def download_pdf(invoice_id):
     invoice = Invoice.get_by_id(invoice_id)
     html = HTML(string=render_template("print/invoice.html", invoice=invoice))
-    response = make_response(html.write_pdf())
-    response.headers["Content-Type"] = "application/pdf"
+    pdf = html.write_pdf()
+
+    response = Response(pdf, content_type="application/pdf")
+    response.headers["Content-Disposition"] = f"inline; filename=invoice_{invoice_id}.pdf"
+
     return response
 
 

@@ -1,46 +1,120 @@
-<main>
-    <h1>Invoice {{ invoice.invoice_id }}</h1>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Invoice {{ invoice.invoice_id }}</title>
+    <style>
+        @page {
+            size: A4;
+            margin: 20mm;
+        }
 
-    <h2>Customer: {{ invoice.customer.full_name }}</h2>
+        body {
+            font-family: Arial, sans-serif;
+            color: #333;
+            max-width: 800px;
+            margin: auto;
+            padding: 20px;
+            background-color: #f8f8f8;
+        }
 
-    <h3>Address: {{ invoice.customer.address }}</h3>
+        .invoice-container {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
 
-    <h4>Items</h4>
+        h1, h2, h3, h4 {
+            margin: 0;
+        }
 
-    <ol>
-        {% for item in invoice.items %}
-        <li>
-            {{ item.item_name }} | {{ item.qty  }} * {{ item.rate }} = {{ item.amount }}
-        </li>
-        {% endfor %}
-    </ol>
+        h1 {
+            color: #222;
+            text-align: center;
+            border-bottom: 2px solid #000;
+            padding-bottom: 10px;
+        }
 
+        .company-details {
+            text-align: center;
+            margin-bottom: 20px;
+        }
 
-    
-    <p>Total Amount: {{ invoice.total_amount }}</p>
-    <p>Tax: {{ invoice.tax_percent }}%</p>
+        .customer-info, .invoice-details {
+            margin-bottom: 20px;
+        }
 
-    <hr>
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
 
-    <p class="display">Payable Amount: {{ invoice.payable_amount }}</p>
-</main>
+        th, td {
+            border: 1px solid #ddd;
+            padding: 10px;
+            text-align: left;
+        }
 
+        th {
+            background-color: #f2f2f2;
+        }
 
-<style>
-    @page {
-        size: A4;
-        background-color: beige;
-    }
+        .amount-summary {
+            margin-top: 20px;
+            text-align: right;
+        }
 
+        .display {
+            font-size: 24px;
+            font-weight: bold;
+            color: #111;
+        }
 
-    h1 {
-        color: #111;
-    }
+    </style>
+</head>
+<body>
 
-    .display {
-        font-size: 32px;
-        font-weight: bold;
-        color: #111;
-    }
-</style>
+    <div class="invoice-container">
+        <h1>Invoice #{{ invoice.invoice_id }}</h1>
 
+        <div class="customer-info">
+            <h3>Customer Details:</h3>
+            <p><strong>Name:</strong> {{ invoice.customer.full_name }}</p>
+            <p><strong>Address:</strong> {{ invoice.customer.address }}</p>
+        </div>
+
+        <h4>Invoice Items</h4>
+        <table>
+            <thead>
+                <tr>
+                    <th>Item Name</th>
+                    <th>Quantity</th>
+                    <th>Rate</th>
+                    <th>Amount</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in invoice.items %}
+                <tr>
+                    <td>{{ item.item_name }}</td>
+                    <td>{{ item.qty }}</td>
+                    <td>{{ item.rate }}</td>
+                    <td>{{ item.amount }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <div class="amount-summary">
+            <p><strong>Total Amount:</strong> {{ invoice.total_amount }}</p>
+            <p><strong>Tax:</strong> {{ invoice.tax_percent }}%</p>
+            <hr>
+            <p class="display"><strong>Payable Amount:</strong> {{ invoice.payable_amount }}</p>
+        </div>
+    </div>
+
+</body>
+</html>
