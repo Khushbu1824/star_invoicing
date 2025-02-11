@@ -1,6 +1,8 @@
 import json
 
-from flask import Flask, render_template, request, redirect, make_response
+import requests
+
+from flask import Flask, render_template, request, redirect, url_for, make_response
 
 from peewee import SqliteDatabase
 
@@ -41,7 +43,8 @@ def customers():
 
 @app.route("/new-invoice")
 def create_invoice_form():
-    return render_template("create-invoice.html")
+    customers = Customer.select()
+    return render_template("create-invoice.html", customers=customers)
 
 
 @app.route("/invoices", methods=["GET", "POST"])
@@ -52,7 +55,6 @@ def invoices():
         tax_percent = float(data.get("tax_percent"))
 
         items_json = data.get("invoice_items")
-
         items = json.loads(items_json)
 
         invoice = Invoice(
@@ -62,7 +64,6 @@ def invoices():
             tax_percent=tax_percent,
             payable_amount=total_amount + (total_amount * tax_percent) / 100,
         )
-
         invoice.save()
 
         for item in items:
@@ -74,6 +75,23 @@ def invoices():
                 amount=int(item.get("qty")) * float(item.get("price"))
             ).save()
 
+        # e-Invoicing API Integration
+        payload = {
+            "customer_name": data.get("customer"),
+            "invoice_id": invoice.invoice_id,
+            "payable_amount": invoice.payable_amount
+        }
+
+        try:
+            response = requests.post("https://frappe.school/api/method/generate-pro-einvoice-id", json=payload)
+            response_data = response.json()
+
+            if "arn" in response_data:
+                invoice.gov_arn = response_data["arn"]
+                invoice.save()
+        except requests.RequestException as e:
+            print(f"Failed to fetch ARN: {e}")
+
         return redirect("/invoices")
     else:
         return render_template("list-invoice.html", invoices=Invoice.select())
@@ -81,15 +99,109 @@ def invoices():
 
 @app.route("/download/<int:invoice_id>")
 def download_pdf(invoice_id):
-    # get the invoice
     invoice = Invoice.get_by_id(invoice_id)
-
-    # generate the PDF
     html = HTML(string=render_template("print/invoice.html", invoice=invoice))
     response = make_response(html.write_pdf())
-
     response.headers["Content-Type"] = "application/pdf"
-
-    # send it back to the user
     return response
 
+
+@app.route("/delete-customer/<int:customer_id>", methods=["POST"])
+def delete_customer(customer_id):
+    try:
+        customer = Customer.get_or_none(id=customer_id)
+        if customer:
+            customer.delete_instance(recursive=True)
+            return redirect("/customers")
+        else:
+            return "Customer not found", 404
+    except Exception as e:
+        return str(e), 500
+
+
+@app.route("/edit-customer/<int:customer_id>")
+def edit_customer_form(customer_id):
+    customer = Customer.get_or_none(id=customer_id)
+    if not customer:
+        return "Customer not found", 404
+    return render_template("edit-customer.html", customer=customer)
+
+
+@app.route("/update-customer/<int:customer_id>", methods=["POST"])
+def update_customer(customer_id):
+    try:
+        customer = Customer.get_or_none(id=customer_id)
+        if not customer:
+            return "Customer not found", 404
+        
+        customer.full_name = request.form.get("full_name")
+        customer.address = request.form.get("address")
+        customer.save()
+
+        return redirect(url_for("customers"))
+    except Exception as e:
+        return str(e), 500
+
+
+@app.route("/delete-invoice/<int:invoice_id>", methods=["POST"])
+def delete_invoice(invoice_id):
+    try:
+        invoice = Invoice.get_or_none(Invoice.invoice_id == invoice_id)
+        if invoice:
+            invoice.delete_instance(recursive=True)
+            return redirect(url_for("invoices"))
+        return "Invoice not found", 404
+    except Exception as e:
+        return str(e), 500
+
+
+@app.route("/edit-invoice/<int:invoice_id>")
+def edit_invoice_form(invoice_id):
+    invoice = Invoice.get_or_none(Invoice.invoice_id == invoice_id)
+    if not invoice:
+        return "Invoice not found", 404
+    return render_template("edit-invoice.html", invoice=invoice)
+
+
+@app.route("/update-invoice/<int:invoice_id>", methods=["POST"])
+def update_invoice(invoice_id):
+    try:
+        invoice = Invoice.get_or_none(Invoice.invoice_id == invoice_id)
+        if not invoice:
+            return "Invoice not found", 404
+
+        invoice.date = request.form.get("date")
+        invoice.tax_percent = float(request.form.get("tax_percent"))
+
+        existing_items = {item.id: item for item in invoice.items}
+        InvoiceItem.delete().where(InvoiceItem.invoice == invoice).execute()
+
+        item_names = request.form.getlist("item_name[]")
+        quantities = request.form.getlist("qty[]")
+        rates = request.form.getlist("rate[]")
+        amounts = request.form.getlist("amount[]")
+
+        total_amount = 0
+
+        for i in range(len(item_names)):
+            qty = int(quantities[i])
+            rate = float(rates[i])
+            amount = qty * rate
+            total_amount += amount
+
+            InvoiceItem.create(
+                invoice=invoice,
+                item_name=item_names[i],
+                qty=qty,
+                rate=rate,
+                amount=amount
+            )
+
+        invoice.total_amount = total_amount
+        invoice.payable_amount = total_amount + (total_amount * invoice.tax_percent / 100)
+        invoice.save()
+
+        return redirect(url_for("invoices"))
+
+    except Exception as e:
+        return str(e), 500
